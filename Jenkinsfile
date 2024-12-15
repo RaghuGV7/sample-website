@@ -32,7 +32,6 @@ pipeline {
             steps {
                  sshagent(['aws-ec2-key']) {
                     sh '''
-                    chmod 600 $SSH_KEY_FILE
                     ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "echo Connected to EC2"
                     '''
 
