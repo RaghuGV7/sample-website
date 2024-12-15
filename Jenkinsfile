@@ -30,11 +30,7 @@ pipeline {
 
         stage('Upload Package to EC2') {
             steps {
-                 sshagent(['aws-ec2-key']) {
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "echo Connected to EC2"
-                    '''
-
+                sshagent(['aws-ec2-key']) {
                     sh '''
                     echo "Uploading package to EC2 instance..."
                     scp -o StrictHostKeyChecking=no website.zip $EC2_USER@$EC2_HOST:/tmp
@@ -45,13 +41,34 @@ pipeline {
 
         stage('Deploy with Chef') {
             steps {
-                 sshagent(['aws-ec2-key']) {
+                sshagent(['aws-ec2-key']) {
                     sh '''
-                    echo "Running Chef to deploy application..."
-                    knife bootstrap $EC2_HOST \
-                        --ssh-user $EC2_USER \
-                        --node-name website-deployment \
-                        --run-list 'recipe[website]'
+                    echo "Setting up Chef on the EC2 instance..."
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST <<EOF
+                        if ! command -v chef-client &> /dev/null; then
+                            echo "Installing Chef..."
+                            curl -L https://omnitruck.chef.io/install.sh | sudo bash
+                        fi
+                        
+                        echo "Running Chef client with the website recipe..."
+                        echo "
+                        cookbook_path [ '/tmp/cookbooks' ]
+                        node_name 'website-deployment'
+                        " | sudo tee /etc/chef/client.rb
+
+                        mkdir -p /tmp/cookbooks/website/recipes
+                        echo "
+                        # Chef Recipe to deploy the website
+                        bash 'unzip_website' do
+                            code <<-EOH
+                            unzip -o /tmp/website.zip -d /var/www/html/
+                            chown -R www-data:www-data /var/www/html/
+                            EOH
+                        end
+                        " | sudo tee /tmp/cookbooks/website/recipes/default.rb
+
+                        sudo chef-client --local-mode --runlist 'recipe[website]'
+                    EOF
                     '''
                 }
             }
