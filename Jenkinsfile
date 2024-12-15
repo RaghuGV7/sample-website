@@ -43,31 +43,40 @@ pipeline {
             steps {
                 sshagent(['aws-ec2-key']) {
                     sh '''
-                    echo "Setting up Chef on the EC2 instance..."
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST <<EOF
-                        if ! command -v chef-client &> /dev/null; then
-                            echo "Installing Chef..."
-                            curl -L https://omnitruck.chef.io/install.sh | sudo bash
-                        fi
-                        
-                        echo "Running Chef client with the website recipe..."
-                        echo "
-                        cookbook_path [ '/tmp/cookbooks' ]
-                        node_name 'website-deployment'
-                        " | sudo tee /etc/chef/client.rb
+                    echo "Setting up Chef and deploying application..."
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST <<'EOF'
+                    
+                    # Accept Chef license
+                    sudo chef-client --chef-license accept || true
 
-                        mkdir -p /tmp/cookbooks/website/recipes
-                        echo "
-                        # Chef Recipe to deploy the website
-                        bash 'unzip_website' do
-                            code <<-EOH
-                            unzip -o /tmp/website.zip -d /var/www/html/
-                            chown -R www-data:www-data /var/www/html/
-                            EOH
-                        end
-                        " | sudo tee /tmp/cookbooks/website/recipes/default.rb
+                    # Install Chef if not present
+                    if ! command -v chef-client &> /dev/null; then
+                        echo "Installing Chef..."
+                        curl -L https://omnitruck.chef.io/install.sh | sudo bash
+                    fi
+                    
+                    # Create the required directory structure
+                    mkdir -p /tmp/cookbooks/website/recipes
 
-                        sudo chef-client --local-mode --runlist 'recipe[website]'
+                    # Create the Chef configuration file
+                    echo "
+                    cookbook_path ['/tmp/cookbooks']
+                    node_name 'website-deployment'
+                    " | sudo tee /etc/chef/client.rb
+
+                    # Create the Chef recipe
+                    echo "
+                    bash 'unzip_website' do
+                        code <<-EOH
+                        unzip -o /tmp/website.zip -d /var/www/html/
+                        chown -R www-data:www-data /var/www/html/
+                        EOH
+                    end
+                    " | sudo tee /tmp/cookbooks/website/recipes/default.rb
+
+                    # Run Chef client in local mode
+                    sudo chef-client --local-mode --runlist 'recipe[website]' --chef-license accept
+
                     EOF
                     '''
                 }
