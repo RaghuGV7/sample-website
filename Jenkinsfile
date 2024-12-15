@@ -67,8 +67,20 @@ pipeline {
                     echo "
                     bash 'unzip_website' do
                         code <<-EOH
-                        unzip -o /tmp/website.zip -d /var/www/html/
-                        chown -R www-data:www-data /var/www/html/
+                        # Ensure the target directory exists
+                        sudo mkdir -p /var/www/html || exit 1
+                    
+                        # Unzip the website.zip file to the target directory
+                        sudo unzip -o /tmp/website.zip -d /var/www/html/ || exit 1
+                    
+                        # Ensure the correct user exists for chown; check for apache or nginx user
+                        if id "apache" &>/dev/null; then
+                            sudo chown -R apache:apache /var/www/html/
+                        elif id "nginx" &>/dev/null; then
+                            sudo chown -R nginx:nginx /var/www/html/
+                        else
+                            sudo chown -R ec2-user:ec2-user /var/www/html/
+                        fi
                         EOH
                     end
                     " | sudo tee /tmp/cookbooks/website/recipes/default.rb || exit 1
@@ -78,7 +90,7 @@ pipeline {
                     echo "Running Chef client in local mode..."
 
                     # Run Chef client in local mode
-                    sudo chef-client --local-mode --runlist 'recipe[website]' || exit 1
+                    sudo chef-client --local-mode --runlist 'recipe[website]' -c /etc/chef/client.rb || exit 1
 
                     EOF
                     '''
