@@ -45,7 +45,7 @@ pipeline {
                     sh '''
                     echo "Setting up Chef and deploying application..."
                     ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST <<'EOF'
-                    
+
                     # Install Chef if not present
                     if ! command -v chef-client &> /dev/null; then
                         echo "Installing Chef..."
@@ -53,14 +53,15 @@ pipeline {
                     fi
                     
                     # Create the required directory structure
-                    mkdir -p /tmp/cookbooks/website/recipes
+                    mkdir -p /tmp/cookbooks/website/recipes || exit 1
+                    echo "Cookbook directory created: /tmp/cookbooks/website/recipes"
 
                     # Create the Chef configuration file for local mode
                     echo "
                     chef_license 'accept'
                     cookbook_path ['/tmp/cookbooks']
                     node_name 'website-deployment'
-                    " | sudo tee /etc/chef/client.rb
+                    " | sudo tee /etc/chef/client.rb || exit 1
 
                     # Create the Chef recipe
                     echo "
@@ -70,10 +71,14 @@ pipeline {
                         chown -R www-data:www-data /var/www/html/
                         EOH
                     end
-                    " | sudo tee /tmp/cookbooks/website/recipes/default.rb
+                    " | sudo tee /tmp/cookbooks/website/recipes/default.rb || exit 1
+
+                    # Log to verify cookbook existence
+                    ls -la /tmp/cookbooks/website/recipes
+                    echo "Running Chef client in local mode..."
 
                     # Run Chef client in local mode
-                    sudo chef-client --local-mode --runlist 'recipe[website]'
+                    sudo chef-client --local-mode --runlist 'recipe[website]' || exit 1
 
                     EOF
                     '''
