@@ -91,9 +91,7 @@ pipeline {
 
                     # Run Chef client in local mode
                     sudo chef-client --local-mode --runlist 'recipe[website]' -c /etc/chef/client.rb || exit 1
-
-                    'EOF'
-                    '''
+EOF'''
                 }
             }
         }
