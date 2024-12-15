@@ -32,7 +32,7 @@ pipeline {
             steps {
                  sshagent(['aws-ec2-key']) {
                     sh '''
-                    ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "echo Connected to EC2"
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "echo Connected to EC2"
                     '''
 
                     sh '''
