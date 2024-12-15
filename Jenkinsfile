@@ -44,7 +44,7 @@ pipeline {
                 sshagent(['aws-ec2-key']) {
                     sh '''
                     echo "Setting up Chef and deploying application..."
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" <<- _EOF_
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" <<'EOF'
 
                     # Install Chef if not present
                     if ! command -v chef-client &> /dev/null; then
@@ -92,7 +92,8 @@ pipeline {
                     # Run Chef client in local mode
                     sudo chef-client --local-mode --runlist 'recipe[website]' -c /etc/chef/client.rb || exit 1
 
-                    _EOF_'''
+                    'EOF'
+                    '''
                 }
             }
         }
