@@ -44,7 +44,7 @@ pipeline {
                 sshagent(['aws-ec2-key']) {
                     sh '''
                     echo "Setting up Chef and deploying application..."
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST <<'EOF'
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" <<'EOF'
 
                     # Install Chef if not present
                     if ! command -v chef-client &> /dev/null; then
@@ -69,14 +69,14 @@ pipeline {
                         code <<-EOH
                         # Ensure the target directory exists
                         sudo mkdir -p /var/www/html || exit 1
-                    
+                        
                         # Unzip the website.zip file to the target directory
                         sudo unzip -o /tmp/website.zip -d /var/www/html/ || exit 1
-                    
+                        
                         # Ensure the correct user exists for chown; check for apache or nginx user
-                        if id "apache" &>/dev/null; then
+                        if id 'apache' &>/dev/null; then
                             sudo chown -R apache:apache /var/www/html/
-                        elif id "nginx" &>/dev/null; then
+                        elif id 'nginx' &>/dev/null; then
                             sudo chown -R nginx:nginx /var/www/html/
                         else
                             sudo chown -R ec2-user:ec2-user /var/www/html/
