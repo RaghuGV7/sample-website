@@ -30,15 +30,15 @@ pipeline {
 
         stage('Upload Package to EC2') {
             steps {
-                withCredentials([file(credentialsId: 'aws-ec2-key', variable: 'SSH_KEY_FILE')]) {
+                 sshagent(['aws-ec2-key']) {
                     sh '''
                     chmod 600 $SSH_KEY_FILE
-                    ssh -i $SSH_KEY_FILE -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "echo Connected to EC2"
+                    ssh -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "echo Connected to EC2"
                     '''
 
                     sh '''
                     echo "Uploading package to EC2 instance..."
-                    scp -i $SSH_KEY_FILE -o StrictHostKeyChecking=no website.zip $EC2_USER@$EC2_HOST:/tmp
+                    scp -o StrictHostKeyChecking=no website.zip $EC2_USER@$EC2_HOST:/tmp
                     '''
                 }
             }
@@ -46,12 +46,11 @@ pipeline {
 
         stage('Deploy with Chef') {
             steps {
-                withCredentials([file(credentialsId: 'aws-ec2-key', variable: 'SSH_KEY_FILE')]) {
+                 sshagent(['aws-ec2-key']) {
                     sh '''
                     echo "Running Chef to deploy application..."
                     knife bootstrap $EC2_HOST \
                         --ssh-user $EC2_USER \
-                        --identity-file $SSH_KEY_FILE \
                         --node-name website-deployment \
                         --run-list 'recipe[website]'
                     '''
