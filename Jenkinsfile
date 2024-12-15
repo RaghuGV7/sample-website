@@ -4,10 +4,9 @@ pipeline {
     environment {
         // Define AWS and Chef paths or variables
         CHEF_HOME = '/home/jenkins/.chef'
-        AWS_REGION = 'us-east-1'
-        SSH_KEY = '/path/to/aws-ec2-key.pem'
+        AWS_REGION = 'eu-west-2'
         EC2_USER = 'ec2-user'
-        EC2_HOST = 'ec2-public-ip-address'
+        EC2_HOST = 'ec2-13-41-159-25.eu-west-2.compute.amazonaws.com'
     }
 
     stages {
@@ -31,23 +30,32 @@ pipeline {
 
         stage('Upload Package to EC2') {
             steps {
-                sh '''
-                echo "Uploading package to EC2 instance..."
-                scp -i $SSH_KEY website.zip $EC2_USER@$EC2_HOST:/tmp
-                '''
+                withCredentials([file(credentialsId: 'aws-ec2-key', variable: 'SSH_KEY_FILE')]) {
+                    sh '''
+                    chmod 600 $SSH_KEY_FILE
+                    ssh -i $SSH_KEY_FILE -o StrictHostKeyChecking=no ec2-user@${EC2_IP} "echo Connected to EC2"
+                    '''
+
+                    sh '''
+                    echo "Uploading package to EC2 instance..."
+                    scp -i $SSH_KEY_FILE -o StrictHostKeyChecking=no website.zip $EC2_USER@$EC2_HOST:/tmp
+                    '''
+                }
             }
         }
 
         stage('Deploy with Chef') {
             steps {
-                sh '''
-                echo "Running Chef to deploy application..."
-                knife bootstrap $EC2_HOST \
-                    --ssh-user $EC2_USER \
-                    --identity-file $SSH_KEY \
-                    --node-name website-deployment \
-                    --run-list 'recipe[website]'
-                '''
+                withCredentials([file(credentialsId: 'aws-ec2-key', variable: 'SSH_KEY_FILE')]) {
+                    sh '''
+                    echo "Running Chef to deploy application..."
+                    knife bootstrap $EC2_HOST \
+                        --ssh-user $EC2_USER \
+                        --identity-file $SSH_KEY_FILE \
+                        --node-name website-deployment \
+                        --run-list 'recipe[website]'
+                    '''
+                }
             }
         }
     }
