@@ -5,7 +5,7 @@ pipeline {
         // Define AWS and Chef paths or variables
         CHEF_HOME = '/home/jenkins/.chef'
         AWS_REGION = 'eu-west-2'
-        EC2_USER = 'ubuntu'
+        EC2_USER = 'ec2-user'
         EC2_HOST = 'ec2-13-41-159-25.eu-west-2.compute.amazonaws.com'
     }
 
@@ -21,9 +21,9 @@ pipeline {
 
         stage('Package Application') {
             steps {
-                powershell '''
-                Write-Host "Packaging application..."
-                Compress-Archive -Path * -DestinationPath website.zip -Force
+                sh '''
+                echo "Packaging application..."
+                zip -r website.zip *
                 '''
             }
         }
@@ -31,9 +31,9 @@ pipeline {
         stage('Upload Package to EC2') {
             steps {
                 sshagent(['aws-ec2-key']) {
-                    powershell '''
-                    Write-Host "Uploading package to EC2 instance..."
-                    pscp -scp -pw $env:SSH_KEY_PATH website.zip $env:EC2_USER@$env:EC2_HOST:/tmp
+                    sh '''
+                    echo "Uploading package to EC2 instance..."
+                    scp -o StrictHostKeyChecking=no website.zip $EC2_USER@$EC2_HOST:/tmp
                     '''
                 }
             }
@@ -42,16 +42,16 @@ pipeline {
         stage('Deploy with Chef') {
             steps {
                 sshagent(['aws-ec2-key']) {
-                    powershell '''
-                    Write-Host "Setting up Chef and deploying application..."
-                    ssh -o StrictHostKeyChecking=no $env:EC2_USER@$env:EC2_HOST "bash -s" <<'EOF'
+                    sh '''
+                    echo "Setting up Chef and deploying application..."
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" <<'EOF'
 
                     # Install Chef if not present
                     if ! command -v chef-client &> /dev/null; then
                         echo "Installing Chef..."
                         curl -L https://omnitruck.chef.io/install.sh | sudo bash
                     fi
-
+                    
                     # Create the required directory structure
                     mkdir -p /tmp/cookbooks/website/recipes || exit 1
                     echo "Cookbook directory created: /tmp/cookbooks/website/recipes"
@@ -69,12 +69,18 @@ pipeline {
                         code <<-EOH
                         # Ensure the target directory exists
                         sudo mkdir -p /var/www/html || exit 1
-
+                        
                         # Unzip the website.zip file to the target directory
                         sudo unzip -o /tmp/website.zip -d /var/www/html/ || exit 1
-
-                        # Set the correct ownership for Apache (www-data on Ubuntu)
-                        sudo chown -R www-data:www-data /var/www/html/
+                        
+                        # Ensure the correct user exists for chown; check for apache or nginx user
+                        if id 'apache' &>/dev/null; then
+                            sudo chown -R apache:apache /var/www/html/
+                        elif id 'nginx' &>/dev/null; then
+                            sudo chown -R nginx:nginx /var/www/html/
+                        else
+                            sudo chown -R ec2-user:ec2-user /var/www/html/
+                        fi
                         EOH
                     end
                     " | sudo tee /tmp/cookbooks/website/recipes/default.rb || exit 1
@@ -93,10 +99,10 @@ EOF'''
 
     post {
         success {
-            Write-Host "Deployment completed successfully!"
+            echo "Deployment completed successfully!"
         }
         failure {
-            Write-Host "Deployment failed. Check logs for details."
+            echo "Deployment failed. Check logs for details.."
         }
     }
 }
